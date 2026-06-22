@@ -1,0 +1,137 @@
+name: Update Registry
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Release modules and publish registry.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          CHANGED=0
+          MODULES="[]"
+          FOUND=()
+
+          if gh release view registry &>/dev/null; then
+            gh release download registry -p "registry.json" -D /tmp/ 2>/dev/null || true
+            if [ -f /tmp/registry.json ]; then
+              MODULES=$(jq '.modules // []' /tmp/registry.json)
+            fi
+          else
+            CHANGED=1
+          fi
+
+          for file in $(find . -maxdepth 2 -name 'module.php' | sort); do
+            get() { grep -oP "'$1'\s*=>\s*'\K[^']+" "$file"; }
+
+            MODULE=$(basename $(dirname "$file"))
+            VERSION=$(get version)
+            [ -z "$VERSION" ] && continue
+
+            FOUND+=("$MODULE")
+            TAG="$MODULE-$VERSION"
+            ASSET="$MODULE.zip"
+
+            if ! gh release view "$TAG" &>/dev/null; then
+              echo "[$MODULE] Creating release $TAG"
+              zip -r "/tmp/$ASSET" "$MODULE" -x "*.git*"
+              gh release create "$TAG" \
+                "/tmp/$ASSET#$ASSET" \
+                --title "$MODULE $VERSION" \
+                --notes "Module: **$MODULE**, Version: **$VERSION**"
+              CHANGED=1
+            else
+              echo "[$MODULE] Release $TAG already exists"
+            fi
+
+            CL_FILE="$MODULE/changelog.md"
+            [ -f "$CL_FILE" ] || CL_FILE="$MODULE/CHANGELOG.md"
+            CHANGELOG=""
+            if [ -f "$CL_FILE" ]; then
+              CHANGELOG=$(awk -v ver="$VERSION" '
+                /^##[[:space:]]+v?/ { if (found) exit; h=$2; sub(/^v/,"",h); if (h==ver) { found=1; next } }
+                found && (started || NF) { started=1; a[++n]=$0 }
+                END { while (n>0 && a[n] ~ /^[[:space:]]*$/) n--; for(i=1;i<=n;i++) print a[i] }
+              ' "$CL_FILE")
+            fi
+
+            VERSION_ENTRY=$(jq -n \
+              --arg version   "$VERSION" \
+              --arg requires  "$(get requires)" \
+              --arg url       "https://github.com/$REPO/releases/download/$TAG/$ASSET" \
+              --arg changelog "$CHANGELOG" \
+              '{version:$version,requires:$requires,download_url:$url}
+               + (if $changelog != "" then {changelog:$changelog} else {} end)')
+
+            MODULES=$(jq \
+              --arg mod      "$MODULE" \
+              --arg name     "$(get name)" \
+              --arg desc     "$(get description)" \
+              --arg author   "$(get author)" \
+              --arg email    "$(get email)" \
+              --arg homepage "$(get homepage)" \
+              --argjson ver  "$VERSION_ENTRY" \
+              '
+              if any(.[]; .module == $mod) then
+                map(
+                  if .module == $mod then
+                    {
+                      module:      $mod,
+                      name:        $name,
+                      description: $desc,
+                      author:      $author,
+                      email:       $email,
+                      homepage:    $homepage,
+                      versions: (
+                        [(.versions // [])[] | select(.version != $ver.version)] + [$ver]
+                        | sort_by(.version)
+                        | reverse
+                      )
+                    }
+                  else . end
+                )
+              else
+                . + [{
+                  module:      $mod,
+                  name:        $name,
+                  description: $desc,
+                  author:      $author,
+                  email:       $email,
+                  homepage:    $homepage,
+                  versions:    [$ver]
+                }]
+              end
+              ' <<< "$MODULES")
+          done
+
+          FOUND_JSON=$(printf '%s\n' "${FOUND[@]}" | jq -R . | jq -s .)
+          PRUNED=$(jq --argjson found "$FOUND_JSON" 'map(select(.module as $m | $found | index($m) != null))' <<< "$MODULES")
+          if [ "$PRUNED" != "$MODULES" ]; then
+            echo "Deleted modules removed from registry"
+            MODULES="$PRUNED"
+            CHANGED=1
+          fi
+
+          if [ "$CHANGED" = "0" ]; then
+            echo "No new module versions — skipping registry update"
+            exit 0
+          fi
+
+          jq --argjson m "$MODULES" '.modules = $m' <<< '{"name":"Official Rotor Languages","modules":[]}' > registry.json
+          echo "Generated registry.json with $(jq length <<< "$MODULES") modules"
+
+          gh release delete registry --yes 2>/dev/null || true
+          gh release create registry registry.json \
+            --title "Registry" \
+            --notes "Auto-generated module registry" \
+            --latest=false
