@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class PadonkiMiddleware
 {
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next): Response
     {
         $response = $next($request);
 

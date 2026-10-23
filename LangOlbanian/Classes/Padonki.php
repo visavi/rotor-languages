@@ -126,8 +126,8 @@ class Padonki
                 }
             }
 
-            return preg_replace(array_keys(self::RULES), array_values(self::RULES), $word);
-        }, $text);
+            return preg_replace(array_keys(self::RULES), array_values(self::RULES), $word) ?? $word;
+        }, $text) ?? $text;
     }
 
     /**
