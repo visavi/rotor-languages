@@ -55,6 +55,7 @@
         "sticker": "Стекер",
         "clear_format": "Ачистеть фарматераванее",
         "invalid_url": "Введе карректный URL (должен начинацца с http:// иле https://)",
+        "invalid_link": "Ссылко должно начинацца с https://, mailto: иле tel:",
         "size_xs": "Очинь мелкей",
         "size_sm": "Мелкей",
         "size_md": "Нармальный",
