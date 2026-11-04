@@ -100,10 +100,11 @@ return [
     'captcha_public'        => 'Публечный ключ',
     'captcha_private'       => 'Секретный ключ',
 
-    'stickers_size'       => 'Максимальный вес стекера',
-    'stickers_max_weight' => 'Максимальный размер стекера',
-    'stickers_min_weight' => 'Минимальный размер стекера',
-    'stickers_per_page'   => 'Стекераф на стр.',
+    'stickers_size'          => 'Максимальный вес стекера',
+    'stickers_max_weight'    => 'Максимальный размер стекера',
+    'stickers_min_weight'    => 'Минимальный размер стекера',
+    'stickers_per_page'      => 'Стекераф на стр.',
+    'stickers_per_page_hint' => 'Кратна 12 — тагда рядэ стекераф полнэе на экрани любой шырены',
 
     'page_invalid'           => 'Нидапустимая странеца!',
     'settings_empty'         => 'Ни переданы настройке',
